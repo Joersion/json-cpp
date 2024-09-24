@@ -4,7 +4,6 @@
 #include <Poco/JSON/JSONException.h>
 #include <Poco/JSON/Parser.h>
 #include <Poco/JSON/Query.h>
-#include <Poco/JSON/Object.h>
 
 Json::Json(const string &str) : json_() {
     string err = "Json::Json," + str + ",";
@@ -117,10 +116,13 @@ string Json::getString(const string &name, const string &name2) {
     string err = "Json::getString," + name + "," + name2 + ",";
     try {
         if (json_.type() == typeid(Poco::JSON::Object::Ptr)) {
-            char buf[128] = {0};
-            sprintf(buf, "%s[%s]", name.data(), name2.data());
-            Poco::JSON::Query q(json_);
-            return q.findValue(buf, "");
+            Poco::DynamicStruct ds = *json_.extract<Poco::JSON::Object::Ptr>();
+            if (ds[name].isStruct()) {
+                return ds[name][name2].toString();
+            }
+            err += "getString[name] is not an object";
+            errs_.emplace_back(err);
+            return "";
         } else {
             err += "JSON is not an object";
             errs_.emplace_back(err);
@@ -136,69 +138,7 @@ string Json::getString(const string &name, const string &name2) {
 }
 
 int Json::getInt(const string &name, const string &name2) {
-    string err = "Json::getInt," + name + "," + name2 + ",";
-    try {
-        if (json_.type() == typeid(Poco::JSON::Object::Ptr)) {
-            char buf[128] = {0};
-            sprintf(buf, "%s[%s]", name.data(), name2.data());
-            Poco::JSON::Query q(json_);
-            return atoi(q.findValue(buf, "").data());
-        } else {
-            err += "JSON is not an object";
-            errs_.emplace_back(err);
-        }
-    } catch (const Poco::JSON::JSONException &e) {
-        err += e.message();
-        errs_.emplace_back(err);
-    } catch (...) {
-        err += "unknow error";
-        errs_.emplace_back(err);
-    }
-    return 0;
-}
-
-string Json::getString(const string &name, const string &name2, const string &name3) {
-    string err = "Json::getString," + name + "," + name2 + "," + name3 + ",";
-    try {
-        if (json_.type() == typeid(Poco::JSON::Object::Ptr)) {
-            char buf[128] = {0};
-            sprintf(buf, "%s[%s][%s]", name.data(), name2.data(), name3.data());
-            Poco::JSON::Query q(json_);
-            return q.findValue(buf, "");
-        } else {
-            err += "JSON is not an object";
-            errs_.emplace_back(err);
-        }
-    } catch (const Poco::JSON::JSONException &e) {
-        err += e.message();
-        errs_.emplace_back(err);
-    } catch (...) {
-        err += "unknow error";
-        errs_.emplace_back(err);
-    }
-    return "";
-}
-
-int Json::getInt(const string &name, const string &name2, const string &name3) {
-    string err = "Json::getInt," + name + "," + name2 + "," + name3 + ",";
-    try {
-        if (json_.type() == typeid(Poco::JSON::Object::Ptr)) {
-            char buf[128] = {0};
-            sprintf(buf, "%s[%s][%s]", name.data(), name2.data(), name3.data());
-            Poco::JSON::Query q(json_);
-            return atoi(q.findValue(buf, "").data());
-        } else {
-            err += "JSON is not an object";
-            errs_.emplace_back(err);
-        }
-    } catch (const Poco::JSON::JSONException &e) {
-        err += e.message();
-        errs_.emplace_back(err);
-    } catch (...) {
-        err += "unknow error";
-        errs_.emplace_back(err);
-    }
-    return 0;
+    return atoi(getString(name, name2).data());
 }
 
 std::shared_ptr<Json> Json::getJson(const string &name) {
@@ -367,7 +307,7 @@ void Json::append(const string &name, Json &v) {
         if (j.get() && j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
             auto array = j->json_.extract<Poco::JSON::Array::Ptr>();
             Poco::Dynamic::Array dynArray = *array;
-            array->set(dynArray.size(), v);
+            array->set(dynArray.size(), v.json_);
             add(name, *j);
         } else {
             err += "JSON is not an Array";
@@ -432,7 +372,7 @@ void Json::append(Json &v) {
         if (json_.type() == typeid(Poco::JSON::Array::Ptr)) {
             auto array = json_.extract<Poco::JSON::Array::Ptr>();
             Poco::Dynamic::Array dynArray = *array;
-            array->set(dynArray.size(), v);
+            array->set(dynArray.size(), v.json_);
         } else {
             err += "JSON is not an Array";
             errs_.emplace_back(err);
@@ -515,10 +455,11 @@ void Json::clear(const string &name) {
     try {
         std::shared_ptr<Json> j = getJson(name);
         if (j.get() && j->json_.type() == typeid(Poco::JSON::Object::Ptr)) {
-            add(name, "{}");
-
-        } else if (j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
-            add(name, "[]");
+            Json tmp("{}");
+            add(name, tmp);
+        } else if (j.get() && j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
+            Json tmp("[]");
+            add(name, tmp);
         } else {
             err += "neither an object nor an array";
             errs_.emplace_back(err);
@@ -564,7 +505,7 @@ int Json::size(const string &name) {
         if (j.get() && j->json_.type() == typeid(Poco::JSON::Object::Ptr)) {
             auto obj = j->json_.extract<Poco::JSON::Object::Ptr>();
             return obj->getNames().size();
-        } else if (j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
+        } else if (j.get() && j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
             auto array = j->json_.extract<Poco::JSON::Array::Ptr>();
             Poco::Dynamic::Array dynArray = *array;
             return dynArray.size();
@@ -582,13 +523,13 @@ int Json::size(const string &name) {
     return 0;
 }
 
-std::shared_ptr<Json> Json::element(int i) {
-    string err = "Json::element," + std::to_string(i) + ",";
+std::shared_ptr<Json> Json::elementObj(int i) {
+    string err = "Json::elementObj," + std::to_string(i) + ",";
     try {
         if (json_.type() == typeid(Poco::JSON::Array::Ptr)) {
             auto array = json_.extract<Poco::JSON::Array::Ptr>();
             Poco::Dynamic::Var v = array->get(i);
-            return std::make_shared<Json>(v.toString());
+            return std::make_shared<Json>(v);
         } else {
             err += "JSON is not an Array";
             errs_.emplace_back(err);
@@ -603,14 +544,14 @@ std::shared_ptr<Json> Json::element(int i) {
     return std::shared_ptr<Json>();
 }
 
-std::shared_ptr<Json> Json::element(const string &name, int i) {
-    string err = "Json::element," + name + "," + std::to_string(i) + ",";
+std::shared_ptr<Json> Json::elementObj(const string &name, int i) {
+    string err = "Json::elementObj," + name + "," + std::to_string(i) + ",";
     try {
         std::shared_ptr<Json> j = getJson(name);
         if (j.get() && j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
             auto array = j->json_.extract<Poco::JSON::Array::Ptr>();
             Poco::Dynamic::Var v = array->get(i);
-            return std::make_shared<Json>(v.toString());
+            return std::make_shared<Json>(v);
         } else {
             err += "JSON is not an Array";
             errs_.emplace_back(err);
@@ -623,6 +564,96 @@ std::shared_ptr<Json> Json::element(const string &name, int i) {
         errs_.emplace_back(err);
     }
     return std::shared_ptr<Json>();
+}
+
+int Json::elementInt(int i) {
+    string err = "Json::elementInt," + std::to_string(i) + ",";
+    try {
+        if (json_.type() == typeid(Poco::JSON::Array::Ptr)) {
+            auto array = json_.extract<Poco::JSON::Array::Ptr>();
+            Poco::Dynamic::Var v = array->get(i);
+            if (v.type() == typeid(int)) {
+                return v;
+            }
+        } else {
+            err += "JSON is not an Array";
+            errs_.emplace_back(err);
+        }
+    } catch (const Poco::JSON::JSONException &e) {
+        err += e.message();
+        errs_.emplace_back(err);
+    } catch (...) {
+        err += "unknow error";
+        errs_.emplace_back(err);
+    }
+    return 0;
+}
+
+int Json::elementInt(const string &name, int i) {
+    string err = "Json::elementInt," + name + "," + std::to_string(i) + ",";
+    try {
+        std::shared_ptr<Json> j = getJson(name);
+        if (j.get() && j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
+            auto array = j->json_.extract<Poco::JSON::Array::Ptr>();
+            Poco::Dynamic::Var v = array->get(i);
+            if (v.type() == typeid(int)) {
+                return v;
+            }
+        } else {
+            err += "JSON is not an Array";
+            errs_.emplace_back(err);
+        }
+    } catch (const Poco::JSON::JSONException &e) {
+        err += e.message();
+        errs_.emplace_back(err);
+    } catch (...) {
+        err += "unknow error";
+        errs_.emplace_back(err);
+    }
+    return 0;
+}
+
+string Json::element(int i) {
+    string err = "Json::element," + std::to_string(i) + ",";
+    try {
+        if (json_.type() == typeid(Poco::JSON::Array::Ptr)) {
+            auto array = json_.extract<Poco::JSON::Array::Ptr>();
+            Poco::Dynamic::Var v = array->get(i);
+            return v.toString();
+        } else {
+            err += "JSON is not an Array";
+            errs_.emplace_back(err);
+        }
+    } catch (const Poco::JSON::JSONException &e) {
+        err += e.message();
+        errs_.emplace_back(err);
+    } catch (...) {
+        err += "unknow error";
+        errs_.emplace_back(err);
+    }
+    return 0;
+}
+
+string Json::element(const string &name, int i) {
+    string err = "Json::element," + name + "," + std::to_string(i) + ",";
+    try {
+        std::shared_ptr<Json> j = getJson(name);
+        if (j.get() && j->json_.type() == typeid(Poco::JSON::Array::Ptr)) {
+            auto array = j->json_.extract<Poco::JSON::Array::Ptr>();
+            Poco::Dynamic::Var v = array->get(i);
+            return v.toString();
+        } else {
+            err += "JSON is not an Array";
+            errs_.emplace_back(err);
+        }
+    } catch (const Poco::JSON::JSONException &e) {
+        err += e.message();
+        errs_.emplace_back(err);
+    } catch (...) {
+        err += "unknow error";
+        errs_.emplace_back(err);
+    }
+    return "";
 }
 
 void Json::getKeys(vector<string> &keys) {

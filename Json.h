@@ -12,7 +12,7 @@ public:
     Json(const string &str);
     Json(const Poco::Dynamic::Var &p);
     Json();
-    Json(const char* p);
+    Json(const char *p);
     Json(const Json &p);
     Json &operator=(const Json &p);
     ~Json();
@@ -24,8 +24,6 @@ public:
     int getInt(const string &name);
     string getString(const string &name, const string &name2);
     int getInt(const string &name, const string &name2);
-    string getString(const string &name, const string &name2, const string &name3);
-    int getInt(const string &name, const string &name2, const string &name3);
     std::shared_ptr<Json> getJson(const string &name);
 
     void add(const string &name, const char *value);
@@ -47,8 +45,13 @@ public:
     void clear(const string &name);
     int size();
     int size(const string &name);
-    std::shared_ptr<Json> element(int i);
-    std::shared_ptr<Json> element(const string &name, int i);
+
+    std::shared_ptr<Json> elementObj(int i);
+    std::shared_ptr<Json> elementObj(const string &name, int i);
+    int elementInt(int i);
+    int elementInt(const string &name, int i);
+    string element(int i);
+    string element(const string &name, int i);
 
     void getKeys(vector<string> &keys);
 
