@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(json-cpp)
+project(json_cpp)
 
 ADD_DEFINITIONS( -O3 )
 
@@ -13,6 +13,6 @@ find_package(Poco REQUIRED COMPONENTS JSON)
 
 file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
-add_library(json-cpp ${SOURCES})
+add_library(json_cpp ${SOURCES})
 
-target_link_libraries(json-cpp PRIVATE Poco::JSON)
+target_link_libraries(json_cpp PRIVATE Poco::JSON)
